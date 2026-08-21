@@ -13,6 +13,8 @@ STRIPE_SECRET = "stripe_fake_key"
 def connect(db_path):
     return sqlite3.connect(db_path)
 
+print("printing fake api key"
+, STRIPE_SECRET)
 
 def find_customer(conn, customer_id):
     cursor = conn.cursor()
