@@ -1,4 +1,4 @@
-name: AI Code Review
+name: AI Code Reviewer
 
 # Reviews the changed files on every pull request with an OpenAI model and
 # posts the findings back to the PR. Informational by default: it comments,
@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   review:
-    name: OpenAI review of changed files
+    name: AI review of changed files
     runs-on: ubuntu-latest
     if: github.event.pull_request.draft == false
 
