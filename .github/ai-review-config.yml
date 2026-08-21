@@ -2,10 +2,24 @@
 # Everything here can be changed without touching the workflow or the script.
 
 # --- Model -------------------------------------------------------------------
-# gpt-4o-mini  : cheap (~$0.01-0.05 per PR), good at the common issue classes.
-# gpt-4o       : ~10x the cost, better at subtle logic and cross-cutting bugs.
-model: gpt-4o-mini
-temperature: 0          # 0 = same diff produces the same findings.
+# Costs below are for a typical 5-file PR, measured against the test fixture.
+#
+#   gpt-5.6-luna    ~$0.002/PR   cheapest; fine for secrets, SQL injection,
+#                                swallowed exceptions. Misses subtler bugs.
+#   gpt-5.6-terra   ~$0.019/PR   the sensible default. Balanced.
+#   gpt-5.3-codex   ~$0.040/PR   code-specialised. Try it if terra is weak
+#                                on your language.
+#   gpt-5.6-sol     ~$0.047/PR   best reasoning; use if reviews are load-bearing.
+#
+# At 100 PRs a month the whole range is $0.19 to $4.71. Cost should not decide
+# this - run ./tests/run_local_test.sh live against each and compare.
+model: gpt-5.6-terra
+
+# GPT-5 family and o-series models reject this parameter and only accept their
+# default. Leave it null for them. Set it to 0 only on older models such as
+# gpt-4o / gpt-4o-mini, where it makes findings reproducible.
+temperature: null
+
 request_timeout: 90     # seconds per file
 max_retries: 2
 
@@ -34,6 +48,7 @@ fail_on_severity: none
 # --- Files to ignore ---------------------------------------------------------
 # Generated, vendored and binary files: reviewing them is pure token spend.
 exclude:
+  - ".github/**"
   - "**/*.lock"
   - "**/package-lock.json"
   - "**/yarn.lock"

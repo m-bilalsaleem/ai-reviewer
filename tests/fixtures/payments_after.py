@@ -8,7 +8,7 @@ import sqlite3
 
 # BUG 1 - hardcoded credential
 STRIPE_SECRET = "stripe_fake_key"
-
+print("printing fake api key", STRIPE_SECRET)
 
 def connect(db_path):
     return sqlite3.connect(db_path)

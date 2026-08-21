@@ -63,11 +63,11 @@ CATEGORIES = [
 ]
 
 DEFAULTS = {
-    "model": "gpt-4o-mini",
+    "model": "gpt-5.6-terra",
     "temperature": 0,
     "request_timeout": 90,
     "max_retries": 2,
-    "max_files": 40,
+    "max_files": 100,
     "max_file_diff_bytes": 12000,
     "max_total_diff_bytes": 60000,
     "diff_context_lines": 3,
@@ -149,6 +149,16 @@ FINDING_SCHEMA = {
         },
     },
 }
+
+
+# The GPT-5 family and the o-series reasoning models reject `temperature`:
+# "Only the default (1) value is supported". Sending it is a hard 400, so the
+# parameter is omitted for those families and kept for everything older.
+REASONING_FAMILY_PREFIXES = ("gpt-5", "o1", "o3", "o4")
+
+
+def supports_temperature(model: str) -> bool:
+    return not model.lower().startswith(REASONING_FAMILY_PREFIXES)
 
 
 def log(message: str) -> None:
@@ -302,23 +312,32 @@ def review_file(client, config: dict, path: str, numbered_diff: str, added: set[
     prompt = build_user_prompt(path, numbered_diff, config["extra_instructions"])
     last_error = None
 
+    kwargs = {
+        "model": config["model"],
+        "timeout": config["request_timeout"],
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        "response_format": {"type": "json_schema", "json_schema": FINDING_SCHEMA},
+    }
+    if config.get("temperature") is not None and supports_temperature(config["model"]):
+        kwargs["temperature"] = config["temperature"]
+
     for attempt in range(int(config["max_retries"]) + 1):
         try:
-            response = client.chat.completions.create(
-                model=config["model"],
-                temperature=config["temperature"],
-                timeout=config["request_timeout"],
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt},
-                ],
-                response_format={"type": "json_schema", "json_schema": FINDING_SCHEMA},
-            )
+            response = client.chat.completions.create(**kwargs)
             payload = json.loads(response.choices[0].message.content or '{"findings":[]}')
             findings = payload.get("findings", [])
             break
         except Exception as error:  # noqa: BLE001 - never let one file kill the run
             last_error = error
+            # Belt and braces: if a model we thought accepted temperature does
+            # not, strip it and try again instead of failing the file.
+            if "temperature" in str(error) and "temperature" in kwargs:
+                kwargs.pop("temperature")
+                log(f"{path}: model rejects temperature; retrying without it")
+                continue
             if attempt < int(config["max_retries"]):
                 log(f"{path}: attempt {attempt + 1} failed ({error}); retrying")
     else:
