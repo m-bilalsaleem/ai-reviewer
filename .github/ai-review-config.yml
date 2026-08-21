@@ -48,6 +48,7 @@ fail_on_severity: none
 # --- Files to ignore ---------------------------------------------------------
 # Generated, vendored and binary files: reviewing them is pure token spend.
 exclude:
+  - ".github/**"
   - "**/*.lock"
   - "**/package-lock.json"
   - "**/yarn.lock"
