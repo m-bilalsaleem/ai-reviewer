@@ -16,6 +16,10 @@ def connect(db_path):
 print("printing fake api key"
 , STRIPE_SECRET)
 
+print("printing fake api key"
+, STRIPE_SECRET)
+
+
 def find_customer(conn, customer_id):
     cursor = conn.cursor()
     cursor.execute("SELECT id, name FROM customers WHERE id = ?", (customer_id,))
