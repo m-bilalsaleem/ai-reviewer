@@ -1,0 +1,81 @@
+name: AI Code Review
+
+# Reviews the changed files on every pull request with an OpenAI model and
+# posts the findings back to the PR. Informational by default: it comments,
+# it does not block, unless `fail_on_severity` is set in the config file.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+# Least privilege: the job needs to read the code and write PR comments.
+# It cannot push, cannot touch Actions, cannot read other secrets.
+permissions:
+  contents: read
+  pull-requests: write
+
+# One review per PR at a time. Pushing three times in a row cancels the two
+# stale runs instead of racing them and paying for all three.
+concurrency:
+  group: ai-code-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: OpenAI review of changed files
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+
+    steps:
+      # Pull requests opened from a fork do NOT receive repository secrets.
+      # Detect that up front and exit cleanly, rather than failing the check
+      # with a confusing "missing API key" error that contributors can't fix.
+      - name: Check preconditions
+        id: pre
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=AI review skipped::PR comes from a fork, so repository secrets are unavailable."
+          elif [ -z "${OPENAI_API_KEY:-}" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=AI review skipped::Secret OPENAI_API_KEY is not configured for this repository."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.pre.outputs.run == 'true'
+        uses: actions/checkout@v4
+        with:
+          # Full history is required: a shallow clone has no merge base to
+          # diff the PR against.
+          fetch-depth: 0
+
+      - name: Set up Python
+        if: steps.pre.outputs.run == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: .github/scripts/requirements.txt
+
+      - name: Install dependencies
+        if: steps.pre.outputs.run == 'true'
+        run: pip install -r .github/scripts/requirements.txt
+
+      - name: Run AI review
+        if: steps.pre.outputs.run == 'true'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # Provided automatically by Actions; scoped by the `permissions`
+          # block above. No personal access token needed.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.event.pull_request.base.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.sha }}
+          AI_REVIEW_CONFIG: .github/ai-review-config.yml
+        run: python .github/scripts/ai_review.py

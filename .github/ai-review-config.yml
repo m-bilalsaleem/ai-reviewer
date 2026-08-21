@@ -1,0 +1,67 @@
+# Tuning knobs for the AI code reviewer.
+# Everything here can be changed without touching the workflow or the script.
+
+# --- Model -------------------------------------------------------------------
+# gpt-4o-mini  : cheap (~$0.01-0.05 per PR), good at the common issue classes.
+# gpt-4o       : ~10x the cost, better at subtle logic and cross-cutting bugs.
+model: gpt-4o-mini
+temperature: 0          # 0 = same diff produces the same findings.
+request_timeout: 90     # seconds per file
+max_retries: 2
+
+# --- Cost / size guardrails --------------------------------------------------
+# These exist so one accidental 5,000-file PR cannot run up a bill.
+max_files: 40              # review at most this many changed files
+max_file_diff_bytes: 12000 # skip a single file whose diff is larger
+max_total_diff_bytes: 60000 # stop once the whole run has sent this much
+diff_context_lines: 3      # lines of unchanged context around each change
+concurrency: 4             # files reviewed in parallel
+
+# --- What counts as reportable ----------------------------------------------
+# Findings below this severity are dropped. low | medium | high | critical
+min_severity: low
+max_findings_per_file: 10
+
+# --- Behaviour ---------------------------------------------------------------
+inline_comments: true   # attach findings to the exact line in the PR diff
+prune_old_comments: true # delete this bot's inline comments from previous runs
+
+# Exit non-zero (failing the check) when a finding at or above this severity
+# is found. none | critical | high | medium
+# Keep this at `none` until you trust the reviewer's output.
+fail_on_severity: none
+
+# --- Files to ignore ---------------------------------------------------------
+# Generated, vendored and binary files: reviewing them is pure token spend.
+exclude:
+  - "**/*.lock"
+  - "**/package-lock.json"
+  - "**/yarn.lock"
+  - "**/pnpm-lock.yaml"
+  - "**/poetry.lock"
+  - "**/Pipfile.lock"
+  - "**/go.sum"
+  - "**/*.min.js"
+  - "**/*.min.css"
+  - "**/*.map"
+  - "**/*.svg"
+  - "**/*.png"
+  - "**/*.jpg"
+  - "**/*.jpeg"
+  - "**/*.gif"
+  - "**/*.ico"
+  - "**/*.pdf"
+  - "**/*.zip"
+  - "**/*.parquet"
+  - "**/*.csv"
+  - "**/*.ipynb"
+  - "dist/**"
+  - "build/**"
+  - "vendor/**"
+  - "node_modules/**"
+  - "**/__snapshots__/**"
+  - "**/migrations/**"
+
+# Extra instructions appended to the review prompt. Use this to encode your
+# team's conventions, e.g. "we use structlog, flag any use of print()".
+extra_instructions: ""
